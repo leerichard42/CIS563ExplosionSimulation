@@ -38,6 +38,7 @@ void SmokeSim::step()
 	// Step3: Calculate new density 
 	mGrid.advectDensity(dt);
 
+	// Step4: Update particles
 	mGrid.advectParticles(dt);
 	
 	mTotalFrameNum++;

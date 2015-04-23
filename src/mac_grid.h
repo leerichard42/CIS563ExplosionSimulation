@@ -32,6 +32,9 @@ public:
 	void project(double dt);
 	void advectTemperature(double dt);
 	void advectDensity(double dt);
+	void calculateDrag(double dt);
+	void calculateTemp(double dt);
+	void checkState(double dt);
 	void advectParticles(double dt);
 
 protected:
@@ -55,7 +58,7 @@ protected:
 	glm::dvec4 getRenderColor(const glm::dvec3& pt);
 	void drawZSheets(bool backToFront);
 	void drawXSheets(bool backToFront);
-	void drawParticle(Particle& p);
+	void drawParticle(Particle* p);
 
 	// GridData accessors
 	enum Direction { X, Y, Z };
@@ -89,7 +92,7 @@ protected:
 	GridData mTemperature;  // Temperature, stored at grid centers
 	GridDataMatrix AMatrix;
 
-	std::vector<Particle> particles;
+	std::vector<Particle*> particles;
 public:
 
 	enum RenderMode { CUBES, SHEETS };

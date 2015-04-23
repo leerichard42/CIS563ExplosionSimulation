@@ -91,7 +91,7 @@ void MACGrid::reset()
 	//particles.push_back(Particle(dvec3(5,5,0)));
 
 	for(int i = 0; i < 15; i++){
-		particles.push_back(Particle(dvec3(10 + ((double)std::rand() / RAND_MAX),10 + ((double)std::rand() / RAND_MAX),0)));
+		particles.push_back(new Particle(dvec3(10 + ((double)std::rand() / RAND_MAX),5 + ((double)std::rand() / RAND_MAX),0)));
 	}
 }
 
@@ -108,11 +108,11 @@ void MACGrid::updateSources()
 	////mVy(0,2,0) = 0.5;
 	////FOR_EACH_FACE_Y { mVy(i,j,k) = 1.0;}
 	////mDensity(2,2,2) = 10.0;
-	//mTemperature(10,5,0) = 50;
+	mTemperature(10,5,0) = 50;
 	//mTemperature(20,22,0) = 50;
 
-	mVx(10,20,0) = 5;
-	mVx(20,10,0) = -5;
+	//mVx(10,10,0) = 5;
+	//mVx(20,20,0) = -5;
 	
 	//mDensity(10,10,0) = 10.0;
 }
@@ -188,39 +188,146 @@ void MACGrid::advectDensity(double dt)
 	mDensity = target.mDensity;
 }
 
-void MACGrid::advectParticles(double dt){
+void MACGrid::calculateDrag(double dt){
+	target.mVx = mVx;
+	target.mVy = mVy;
+	target.mVz = mVz;
+
 	for(int i = 0; i < particles.size(); i++){
-		dvec3 pt = particles[i].getPos();
-		dvec3 velocity = getVelocity(pt);
-		dvec3 newPos = pt + dt * velocity;
+		Particle* p = particles[i];
+		dvec3 pt = p->getPos();
+		dvec3 particleVelocity = p->getVelocity();
+		dvec3 fluidVelocity = getVelocity(pt); //grid velocity at point
+		if(p->getMass() > 1){
+			double coeff = p->getDrag() * p->getRadius() * p->getRadius();
+			dvec3 velocityDiff = fluidVelocity - particleVelocity;
+			dvec3 f = coeff * velocityDiff;
+			dvec3 a = f / p->getMass();
+			dvec3 dragVel = dt * a;
+			p->setVelocity(p->getVelocity() + dragVel);
+			dvec3 xCell = target.mVx.worldToSelf(p->getPos());
+			dvec3 yCell = target.mVy.worldToSelf(p->getPos());
+			dvec3 zCell = target.mVz.worldToSelf(p->getPos());
+
+
+			////check boundaries and set our new velocities
+			target.mVx(xCell[0],xCell[1],xCell[2]) -= (xCell[0] == 0 || xCell[0] == theDim[X]-1) ? 0 : dragVel.x;
+			target.mVy(yCell[0],yCell[1],yCell[2]) -= (yCell[1] == 0 || yCell[1] == theDim[Y]-1) ? 0 : dragVel.y;
+			target.mVz(zCell[0],zCell[1],zCell[2]) -= (zCell[2] == 0 || zCell[2] == theDim[Z]-1) ? 0 : dragVel.z;
+		}
+		else{
+			p->setVelocity(fluidVelocity);
+		}
+	}
+
+	mVx = target.mVx;
+    mVy = target.mVy;
+    mVz = target.mVz;
+}
+
+void MACGrid::calculateTemp(double dt){
+	target.mTemperature = mTemperature;
+
+	for(int i = 0; i < particles.size(); i++){
+		Particle* p = particles[i];
+		dvec3 pt = p->getPos();
+		double particleTemp = p->getTemp();
+		double fluidTemp = getTemperature(pt); //grid velocity at point
+
+		if(p->getThermalMass() > .00001){
+			double coeff = p->getConductivity() * p->getRadius() * p->getRadius();
+			double tempDiff = fluidTemp - particleTemp;
+			double transferRate = coeff * tempDiff;
+			double heatTransfer = dt * transferRate;
+			p->setTemp(p->getTemp() + heatTransfer);
+
+			dvec3 cell = target.mTemperature.worldToSelf(p->getPos());
+			target.mTemperature(cell[0],cell[1],cell[2]) -= heatTransfer;
+		}
+		else{
+			p->setTemp(fluidTemp);
+		}
+	}
+
+	mTemperature = target.mTemperature;
+}
+
+void MACGrid::checkState(double dt){
+	target.mTemperature = mTemperature;
+	for(int i = 0; i < particles.size(); i++){
+		Particle* p = particles[i];
+		//printf("TEMP: %f\n", p->getTemp());
+
+		if(p->getState() == INERT && p->getTemp() > theCombustionIgnition){
+			p->setState(BURNING);
+		}
+		if(p->getState() == BURNING){
+			//Heat Change
+			double transferRate = theCombustionHeat * theCombustionRate;
+			double heatTransfer = dt * transferRate;
+			dvec3 cell = target.mTemperature.worldToSelf(p->getPos()); 
+			cell = cell / theCellSize;
+			target.mTemperature(cell[0],cell[1],cell[2]) += heatTransfer;
+
+			//Soot Change
+			double sootRate = theCombustionSoot * theCombustionRate;
+			double sootAccumulation = p->getSoot() + dt * sootRate;
+			if(sootAccumulation > theCombustionSootPoint){
+				p->setSoot(0);
+				particles.push_back(new Particle(*p));
+			}
+			else{
+				p->setSoot(sootAccumulation);
+			}
+
+			//Mass Change
+			p->setMass(p->getMass() - dt * theCombustionRate);
+			if(p->getMass() < .0001){
+				particles.erase(particles.begin() + i);
+				i--;
+			}
+		}
+	}
+	mTemperature = target.mTemperature;
+}
+
+void MACGrid::advectParticles(double dt){
+	calculateDrag(dt);
+	calculateTemp(dt);
+	checkState(dt);	
+
+	for(int i = 0; i < particles.size(); i++){
+		dvec3 pt = particles[i]->getPos();
+		dvec3 newPos = pt + dt * particles[i]->getVelocity();
+		dvec3* velocity = &(particles[i]->getVelocity());
 
 		if(newPos.x < 0){
 			newPos.x = 0;
-			velocity.x = 0;
+			velocity->x = 0;
 		}
 		if(newPos.x > theDim[0] * theCellSize){
 			newPos.x = theDim[0] * theCellSize;
-			velocity.x = 0;
+			velocity->x = 0;
 		}
 		if(newPos.y < 0){
 			newPos.y = 0;
-			velocity.y = 0;
+			velocity->y = 0;
 		}
 		if(newPos.y > theDim[1] * theCellSize){
 			newPos.y = theDim[1] * theCellSize;
-			velocity.y = 0;
+			velocity->y = 0;
 		}
 		if(newPos.z < 0){
 			newPos.z = 0;
-			velocity.z = 0;
+			velocity->z = 0;
 		}
 		if(newPos.z > theDim[2] * theCellSize){
 			newPos.z = theDim[2] * theCellSize;
-			velocity.z = 0;
+			velocity->z = 0;
 		}
 
 
-		particles[i].setPos(newPos);
+		particles[i]->setPos(newPos);
 		//printf("DIM: (%d, %d, %d)\n", theDim[0], theDim[1], theDim[2]);
 		//printf("POS: (%f, %f, %f)\n", pt.x, pt.y, pt.z);
 		//printf("VELOCITY: (%f, %f, %f)\n", velocity.x, velocity.y, velocity.z);
@@ -983,11 +1090,19 @@ void MACGrid::drawCube(const MACGrid::Cube& cube)
    glPopMatrix();
 }
 
-void MACGrid::drawParticle(Particle& p){
+void MACGrid::drawParticle(Particle* p){
 	double PLEN = LEN / 10.0;
-	glColor4dv(glm::value_ptr(dvec4(1,0,0,1)));
+	if(p->getState() == BURNING){
+		glColor4f(1, 0, 0, 1);
+	}
+	else if(p->getState() == INERT){
+		glColor4f(p->getTemp()/10, (1 - p->getTemp()/10), 0.0, 1.0);
+	}
+	else if(p->getState() == SOOT){
+		glColor4f(.7, .7, .7, 1.0);
+	}
 	glPushMatrix();
-	dvec3 pos = p.getPos();
+	dvec3 pos = p->getPos();
 		glTranslated(pos[0], pos[1], pos[2]);      
 		glBegin(GL_QUADS);
 			glNormal3d( 0.0, -1.0,  0.0);

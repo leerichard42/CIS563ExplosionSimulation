@@ -52,10 +52,9 @@ public:
    // Given a point in world coordinates, return the cell index (i,j,k)
    // corresponding to it
    virtual void getCell(const glm::dvec3& pt, int& i, int& j, int& k);
-
-protected:
-
    virtual glm::dvec3 worldToSelf(const glm::dvec3& pt) const;
+
+
 };
 
 class GridDataX : public GridData
