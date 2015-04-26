@@ -98,5 +98,8 @@
     <ClInclude Include="..\..\..\src\particle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\..\CIS 563 HW 3\CIS563SmokeSimulation\src\particle.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

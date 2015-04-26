@@ -86,13 +86,15 @@ void MACGrid::reset()
 	mPressure.initialize();
 	mDensity.initialize();
 	mTemperature.initialize(0.0);
+	mDiv.initialize();
 	calculateAMatrix();
 
 	//particles.push_back(Particle(dvec3(5,5,0)));
-
-	for(int i = 0; i < 15; i++){
-		particles.push_back(new Particle(dvec3(10 + ((double)std::rand() / RAND_MAX),5 + ((double)std::rand() / RAND_MAX),0)));
+	particles.clear();
+	for(int i = 0; i < 300; i++){
+		particles.push_back(new Particle(dvec3(10 + ((double)std::rand() * 1 / RAND_MAX),5 + ((double)std::rand() / RAND_MAX), 0)));
 	}
+	
 }
 
 void MACGrid::initialize()
@@ -109,6 +111,7 @@ void MACGrid::updateSources()
 	////FOR_EACH_FACE_Y { mVy(i,j,k) = 1.0;}
 	////mDensity(2,2,2) = 10.0;
 	mTemperature(10,5,0) = 50;
+	//mDiv(10,5,0) = 10;
 	//mTemperature(20,22,0) = 50;
 
 	//mVx(10,10,0) = 5;
@@ -241,7 +244,8 @@ void MACGrid::calculateTemp(double dt){
 			double heatTransfer = dt * transferRate;
 			p->setTemp(p->getTemp() + heatTransfer);
 
-			dvec3 cell = target.mTemperature.worldToSelf(p->getPos());
+			dvec3 cell = target.mTemperature.worldToSelf(p->getPos()) ;
+			cell = cell/theCellSize;
 			target.mTemperature(cell[0],cell[1],cell[2]) -= heatTransfer;
 		}
 		else{
@@ -260,6 +264,7 @@ void MACGrid::checkState(double dt){
 
 		if(p->getState() == INERT && p->getTemp() > theCombustionIgnition){
 			p->setState(BURNING);
+			
 		}
 		if(p->getState() == BURNING){
 			//Heat Change
@@ -267,6 +272,7 @@ void MACGrid::checkState(double dt){
 			double heatTransfer = dt * transferRate;
 			dvec3 cell = target.mTemperature.worldToSelf(p->getPos()); 
 			cell = cell / theCellSize;
+			mDiv(cell[0], cell[1], cell [2]) +=  (1 / (theCellSize * theCellSize)) * theCombustionVolume * theCombustionRate;
 			target.mTemperature(cell[0],cell[1],cell[2]) += heatTransfer;
 
 			//Soot Change
@@ -286,6 +292,11 @@ void MACGrid::checkState(double dt){
 				particles.erase(particles.begin() + i);
 				i--;
 			}
+		} else {
+			dvec3 cell = target.mTemperature.worldToSelf(p->getPos()); 
+			cell = cell / theCellSize;
+			if (mDiv(cell[0], cell[1], cell[2]) > 0.1)
+			mDiv(cell[0], cell[1], cell[2]) -= 0.1;
 		}
 	}
 	mTemperature = target.mTemperature;
@@ -431,6 +442,8 @@ void MACGrid::addExternalForces(double dt)
    computeVorticityConfinement(dt);
 }
 
+
+
 void MACGrid::project(double dt)
 {
    // TODO: Solve Ax = b for pressure
@@ -468,7 +481,7 @@ void MACGrid::project(double dt)
 
 		//update b
 		double div = mVxltiplier*(divX + divY + divZ);
-		b(i, j, k) = div;
+		b(i, j, k) = div + mDiv(i, j, k);
 	}
 
 
@@ -476,8 +489,8 @@ void MACGrid::project(double dt)
 	GridDataMatrix A = this->AMatrix;
 
 	// 3. Solve for p - store in target.mPressure (pressure)
-	int iterations = 400;
-	double tolerance = 0.01;
+	int iterations = 10;
+	double tolerance = 0.005;
 
 	conjugateGradient(A, target.mPressure, b, iterations, tolerance);
 

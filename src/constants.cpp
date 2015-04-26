@@ -4,7 +4,7 @@
 
 const int theMillisecondsPerFrame = 10;
 
-const int theDim[3] = {30, 30, 1};
+const int theDim[3] = {30, 30, 5};
 
 const double theCellSize = 0.5;
 
@@ -18,7 +18,7 @@ const double theVorticityEpsilon = 0.10;
 
 const double theParticleRad = 0.1;
 const double theFuelDrag = 750.0;
-const double theFuelMass = 5;
+const double theFuelMass = 4;
 const double theFuelConductivity = 200;
 const double theFuelThermalMass = 5;
 
@@ -31,5 +31,5 @@ const double theCombustionIgnition = 10;
 const double theCombustionHeat = 50;
 const double theCombustionSoot = 1;
 const double theCombustionSootPoint = .5;
-const double theCombustionVolume = 2;
+const double theCombustionVolume = 0.1;
 const double theCombustionRate = 0.5;

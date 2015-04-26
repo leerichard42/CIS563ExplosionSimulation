@@ -79,6 +79,7 @@
     <ClCompile Include="..\..\..\src\stb_image_write.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\CIS 563 HW 3\CIS563SmokeSimulation\src\particle.h" />
     <ClInclude Include="..\..\..\src\basic_math.h" />
     <ClInclude Include="..\..\..\src\camera.h" />
     <ClInclude Include="..\..\..\src\clock.h" />
